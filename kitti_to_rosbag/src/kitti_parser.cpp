@@ -34,6 +34,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <opencv2/highgui/highgui.hpp>
 
 #include "kitti_to_rosbag/kitti_parser.h"
+#include "ros/time.h"
 
 namespace kitti {
 
@@ -48,7 +49,7 @@ const std::string KittiParser::kVelodyneFolder = "velodyne_points";
 const std::string KittiParser::kCameraFolder = "image_";
 const std::string KittiParser::kPoseFolder = "oxts";
 
-const std::string KittiParser::kTimestampFilename = "timestamps.txt";
+const std::string KittiParser::kTimestampFilename = "times.txt";
 const std::string KittiParser::kDataFolder = "data";
 
 KittiParser::KittiParser(const std::string &calibration_path,
@@ -339,9 +340,10 @@ bool KittiParser::parseVectorOfDoubles(const std::string &input,
 
 void KittiParser::loadTimestampMaps() {
   // Load timestamps for poses.
-  std::string filename =
-      dataset_path_ + "/" + kPoseFolder + "/" + kTimestampFilename;
-  loadTimestampsIntoVector(filename, &timestamps_pose_ns_);
+  std::string filename = dataset_path_ + "/" + kTimestampFilename;
+  std::cout << filename << std::endl;
+  // loadTimestampsIntoVector(filename, &timestamps_pose_ns_);
+  loadTimesIntoVector(filename, &timestamps_pose_ns_);
 
   std::cout << "Timestmap map for pose:\n";
   for (size_t i = 0; i < timestamps_pose_ns_.size(); ++i) {
@@ -350,15 +352,20 @@ void KittiParser::loadTimestampMaps() {
 
   // Velodyne.
   filename = dataset_path_ + "/" + kVelodyneFolder + "/" + kTimestampFilename;
-  loadTimestampsIntoVector(filename, &timestamps_vel_ns_);
+  // loadTimestampsIntoVector(filename, &timestamps_vel_ns_);
+  loadTimesIntoVector(filename, &timestamps_vel_ns_);
 
   // One per camera.
   timestamps_cam_ns_.resize(camera_calibrations_.size());
   for (int i = 0; i < camera_calibrations_.size(); ++i) {
     filename = dataset_path_ + "/" + getFolderNameForCamera(i) + "/" +
                kTimestampFilename;
-    loadTimestampsIntoVector(filename, &timestamps_cam_ns_[i]);
+    // loadTimestampsIntoVector(filename, &timestamps_cam_ns_[i]);
+    loadTimesIntoVector(filename, &timestamps_cam_ns_[i]);
   }
+
+  filename = dataset_path_ + "/00.txt";
+  loadPosesIntoVector(filename, &poses_vec_);
 }
 
 bool KittiParser::loadTimestampsIntoVector(
@@ -398,6 +405,55 @@ bool KittiParser::loadTimestampsIntoVector(
   return true;
 }
 
+bool KittiParser::loadTimesIntoVector(
+    const std::string &filename, std::vector<uint64_t> *timestamp_vec) const {
+  std::ifstream import_file(filename, std::ios::in);
+  if (!import_file) {
+    return false;
+  }
+
+  timestamp_vec->clear();
+  std::string line;
+  while (std::getline(import_file, line)) {
+    std::stringstream line_stream(line);
+
+    std::string timestamp_string = line_stream.str();
+
+    static const uint64_t kSecondsToNanoSeconds = 1e9;
+    time_t time_since_epoch = std::stoi(timestamp_string);
+
+    uint64_t timestamp = std::stod(timestamp_string) * kSecondsToNanoSeconds +
+                         ros::TIME_MIN.toNSec();
+    timestamp_vec->push_back(timestamp);
+  }
+
+  std::cout << "Timestamps: " << std::endl
+            << timestamp_vec->front() << " " << timestamp_vec->back()
+            << std::endl;
+
+  return true;
+}
+
+bool KittiParser::loadPosesIntoVector(const std::string &filename,
+                                      std::vector<Transformation> *poses_vec) {
+  std::ifstream import_file(filename, std::ios::in);
+  if (!import_file) {
+    return false;
+  }
+
+  poses_vec->clear();
+  std::string line;
+  std::vector<double> parsed_doubles;
+  Transformation pose;
+  while (std::getline(import_file, line)) {
+    if (parseVectorOfDoubles(line, &parsed_doubles)) {
+      if (convertGroundTruthToPose(parsed_doubles, &pose)) {
+        poses_vec->push_back(pose);
+      }
+    }
+  }
+}
+
 bool KittiParser::getCameraCalibration(uint64_t cam_id,
                                        CameraCalibration *cam) const {
   if (cam_id >= camera_calibrations_.size()) {
@@ -431,6 +487,25 @@ bool KittiParser::getPoseAtEntry(uint64_t entry, uint64_t *timestamp,
     }
   }
   return false;
+}
+
+bool KittiParser::getGroundTruthPoseAtEntry(uint64_t entry, uint64_t *timestamp,
+                                            Transformation *pose) {
+  std::string filename = dataset_path_ + "/00.txt";
+  std::cout << filename << std::endl;
+
+  std::ifstream import_file(filename, std::ios::in);
+  if (!import_file) {
+    return false;
+  }
+  if (timestamps_pose_ns_.size() <= entry) {
+    std::cout << timestamps_pose_ns_.size() << std::endl;
+    return false;
+  }
+  *timestamp = timestamps_pose_ns_[entry];
+  *pose = poses_vec_[entry];
+
+  return true;
 }
 
 uint64_t KittiParser::getPoseTimestampAtEntry(uint64_t entry) {
@@ -549,6 +624,38 @@ bool KittiParser::convertGpsToPose(const std::vector<double> &oxts,
 }
 
 // From the MATLAB raw data dev kit.
+bool KittiParser::convertGroundTruthToPose(const std::vector<double> &oxts,
+                                           Transformation *pose) {
+  std::cout << oxts.size() << std::endl;
+  if (oxts.size() < 11) {
+    return false;
+  }
+  Eigen::Vector3d position(oxts[3], oxts[7], oxts[11]);
+
+  Eigen::Matrix3d rotation;
+  rotation << oxts[0], oxts[1], oxts[2], oxts[4], oxts[5], oxts[6], oxts[8],
+      oxts[9], oxts[10];
+
+  Eigen::Quaterniond quaternion(rotation);
+
+  Transformation transform(position, quaternion);
+
+  // Undo the initial transformation, if one is set.
+  // If not, set it.
+  // The transformation only undoes translation and yaw, not roll and pitch
+  // (as these are observable from the gravity vector).
+  if (!initial_pose_set_) {
+    T_initial_pose_.getPosition() = transform.getPosition();
+    T_initial_pose_.getRotation() = transform.getRotation();
+    initial_pose_set_ = true;
+  }
+  // Get back to local coordinates.
+  *pose = T_initial_pose_.inverse() * transform;
+
+  return true;
+}
+
+// From the MATLAB raw data dev kit.
 double KittiParser::latToScale(double lat) const {
   return cos(lat * M_PI / 180.0);
 }
@@ -621,8 +728,10 @@ bool KittiParser::interpolatePoseAtTimestamp(uint64_t timestamp,
   // Load the two transformations.
   uint64_t timestamp_left, timestamp_right;
   Transformation transform_left, transform_right;
-  if (!getPoseAtEntry(left_index, &timestamp_left, &transform_left) ||
-      !getPoseAtEntry(left_index + 1, &timestamp_right, &transform_right)) {
+  if (!getGroundTruthPoseAtEntry(left_index, &timestamp_left,
+                                 &transform_left) ||
+      !getGroundTruthPoseAtEntry(left_index + 1, &timestamp_right,
+                                 &transform_right)) {
     // For some reason couldn't load the poses.
     return false;
   }

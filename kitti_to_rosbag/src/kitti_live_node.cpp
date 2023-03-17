@@ -189,7 +189,7 @@ bool KittiLiveNode::publishEntry(uint64_t entry) {
 
   // Publish poses + TF transforms + clock.
   Transformation pose;
-  if (parser_.getPoseAtEntry(entry, &timestamp_ns, &pose)) {
+  if (parser_.getGroundTruthPoseAtEntry(entry, &timestamp_ns, &pose)) {
     geometry_msgs::PoseStamped pose_msg;
     geometry_msgs::TransformStamped transform_msg;
 

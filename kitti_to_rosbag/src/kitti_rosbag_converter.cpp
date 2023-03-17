@@ -38,16 +38,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace kitti {
 
 class KittiBagConverter {
- public:
-  KittiBagConverter(const std::string& calibration_path,
-                    const std::string& dataset_path,
-                    const std::string& output_filename);
+public:
+  KittiBagConverter(const std::string &calibration_path,
+                    const std::string &dataset_path,
+                    const std::string &output_filename);
 
   void convertAll();
   bool convertEntry(uint64_t entry);
-  void convertTf(uint64_t timestamp_ns, const Transformation& imu_pose);
+  void convertTf(uint64_t timestamp_ns, const Transformation &imu_pose);
 
- private:
+private:
   kitti::KittiParser parser_;
 
   rosbag::Bag bag_;
@@ -62,17 +62,13 @@ class KittiBagConverter {
   std::string pointcloud_topic_;
 };
 
-KittiBagConverter::KittiBagConverter(const std::string& calibration_path,
-                                     const std::string& dataset_path,
-                                     const std::string& output_filename)
-    : parser_(calibration_path, dataset_path, true),
-      world_frame_id_("world"),
-      imu_frame_id_("imu"),
-      cam_frame_id_prefix_("cam"),
-      velodyne_frame_id_("velodyne"),
-      pose_topic_("pose_imu"),
-      transform_topic_("transform_imu"),
-      pointcloud_topic_("velodyne_points") {
+KittiBagConverter::KittiBagConverter(const std::string &calibration_path,
+                                     const std::string &dataset_path,
+                                     const std::string &output_filename)
+    : parser_(calibration_path, dataset_path, true), world_frame_id_("world"),
+      imu_frame_id_("imu"), cam_frame_id_prefix_("cam"),
+      velodyne_frame_id_("velodyne"), pose_topic_("pose_imu"),
+      transform_topic_("transform_imu"), pointcloud_topic_("velodyne_points") {
   // Load all the timestamp maps and calibration parameters.
   parser_.loadCalibration();
   parser_.loadTimestampMaps();
@@ -94,7 +90,7 @@ bool KittiBagConverter::convertEntry(uint64_t entry) {
 
   // Convert poses + TF transforms.
   Transformation pose;
-  if (parser_.getPoseAtEntry(entry, &timestamp_ns, &pose)) {
+  if (parser_.getGroundTruthPoseAtEntry(entry, &timestamp_ns, &pose)) {
     geometry_msgs::PoseStamped pose_msg;
     geometry_msgs::TransformStamped transform_msg;
 
@@ -106,6 +102,7 @@ bool KittiBagConverter::convertEntry(uint64_t entry) {
 
     poseToRos(pose, &pose_msg);
     transformToRos(pose, &transform_msg);
+    std::cout << timestamp_ros << std::endl;
 
     bag_.write(pose_topic_, timestamp_ros, pose_msg);
     bag_.write(transform_topic_, timestamp_ros, transform_msg);
@@ -157,7 +154,7 @@ bool KittiBagConverter::convertEntry(uint64_t entry) {
 }
 
 void KittiBagConverter::convertTf(uint64_t timestamp_ns,
-                                  const Transformation& imu_pose) {
+                                  const Transformation &imu_pose) {
   tf::tfMessage tf_msg;
   ros::Time timestamp_ros;
   timestampToRos(timestamp_ns, &timestamp_ros);
@@ -194,9 +191,9 @@ void KittiBagConverter::convertTf(uint64_t timestamp_ns,
   bag_.write("/tf", timestamp_ros, tf_msg);
 }
 
-}  // namespace kitti
+} // namespace kitti
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, false);
   google::InstallFailureSignalHandler();
