@@ -7,7 +7,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs)
 
 set(CMAKE_MACOSX_RPATH 0)
-add_definitions(-std=c++11)
+add_definitions(-std=c++14)
 
 #############
 # LIBRARIES #
