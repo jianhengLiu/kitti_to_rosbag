@@ -27,14 +27,13 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <iostream>
 #include <fstream>
 #include <iomanip>
-#include <iostream>
 
 #include <opencv2/highgui/highgui.hpp>
 
 #include "kitti_to_rosbag/kitti_parser.h"
-#include "ros/time.h"
 
 namespace kitti {
 
@@ -49,13 +48,15 @@ const std::string KittiParser::kVelodyneFolder = "velodyne_points";
 const std::string KittiParser::kCameraFolder = "image_";
 const std::string KittiParser::kPoseFolder = "oxts";
 
-const std::string KittiParser::kTimestampFilename = "times.txt";
+const std::string KittiParser::kTimestampFilename = "timestamps.txt";
 const std::string KittiParser::kDataFolder = "data";
 
-KittiParser::KittiParser(const std::string &calibration_path,
-                         const std::string &dataset_path, bool rectified)
-    : calibration_path_(calibration_path), dataset_path_(dataset_path),
-      rectified_(rectified), initial_pose_set_(false) {}
+KittiParser::KittiParser(const std::string& calibration_path,
+                         const std::string& dataset_path, bool rectified)
+    : calibration_path_(calibration_path),
+      dataset_path_(dataset_path),
+      rectified_(rectified),
+      initial_pose_set_(false) {}
 
 bool KittiParser::loadCalibration() {
   loadVelToCamCalibration();
@@ -313,8 +314,8 @@ bool KittiParser::loadCamToCamCalibration() {
   return true;
 }
 
-bool KittiParser::parseVectorOfDoubles(const std::string &input,
-                                       std::vector<double> *output) const {
+bool KittiParser::parseVectorOfDoubles(const std::string& input,
+                                       std::vector<double>* output) const {
   output->clear();
   // Parse the line as a stringstream for space-delimeted doubles.
   std::stringstream line_stream(input);
@@ -330,7 +331,7 @@ bool KittiParser::parseVectorOfDoubles(const std::string &input,
     }
     try {
       output->emplace_back(std::stod(element));
-    } catch (const std::exception &exception) {
+    } catch (const std::exception& exception) {
       std::cout << "Could not parse number in import file.\n";
       return false;
     }
@@ -340,10 +341,9 @@ bool KittiParser::parseVectorOfDoubles(const std::string &input,
 
 void KittiParser::loadTimestampMaps() {
   // Load timestamps for poses.
-  std::string filename = dataset_path_ + "/" + kTimestampFilename;
-  std::cout << filename << std::endl;
-  // loadTimestampsIntoVector(filename, &timestamps_pose_ns_);
-  loadTimesIntoVector(filename, &timestamps_pose_ns_);
+  std::string filename =
+      dataset_path_ + "/" + kPoseFolder + "/" + kTimestampFilename;
+  loadTimestampsIntoVector(filename, &timestamps_pose_ns_);
 
   std::cout << "Timestmap map for pose:\n";
   for (size_t i = 0; i < timestamps_pose_ns_.size(); ++i) {
@@ -352,24 +352,19 @@ void KittiParser::loadTimestampMaps() {
 
   // Velodyne.
   filename = dataset_path_ + "/" + kVelodyneFolder + "/" + kTimestampFilename;
-  // loadTimestampsIntoVector(filename, &timestamps_vel_ns_);
-  loadTimesIntoVector(filename, &timestamps_vel_ns_);
+  loadTimestampsIntoVector(filename, &timestamps_vel_ns_);
 
   // One per camera.
   timestamps_cam_ns_.resize(camera_calibrations_.size());
   for (int i = 0; i < camera_calibrations_.size(); ++i) {
     filename = dataset_path_ + "/" + getFolderNameForCamera(i) + "/" +
                kTimestampFilename;
-    // loadTimestampsIntoVector(filename, &timestamps_cam_ns_[i]);
-    loadTimesIntoVector(filename, &timestamps_cam_ns_[i]);
+    loadTimestampsIntoVector(filename, &timestamps_cam_ns_[i]);
   }
-
-  filename = dataset_path_ + "/00.txt";
-  loadPosesIntoVector(filename, &poses_vec_);
 }
 
 bool KittiParser::loadTimestampsIntoVector(
-    const std::string &filename, std::vector<uint64_t> *timestamp_vec) const {
+    const std::string& filename, std::vector<uint64_t>* timestamp_vec) const {
   std::ifstream import_file(filename, std::ios::in);
   if (!import_file) {
     return false;
@@ -405,57 +400,8 @@ bool KittiParser::loadTimestampsIntoVector(
   return true;
 }
 
-bool KittiParser::loadTimesIntoVector(
-    const std::string &filename, std::vector<uint64_t> *timestamp_vec) const {
-  std::ifstream import_file(filename, std::ios::in);
-  if (!import_file) {
-    return false;
-  }
-
-  timestamp_vec->clear();
-  std::string line;
-  while (std::getline(import_file, line)) {
-    std::stringstream line_stream(line);
-
-    std::string timestamp_string = line_stream.str();
-
-    static const uint64_t kSecondsToNanoSeconds = 1e9;
-    time_t time_since_epoch = std::stoi(timestamp_string);
-
-    uint64_t timestamp = std::stod(timestamp_string) * kSecondsToNanoSeconds +
-                         ros::TIME_MIN.toNSec();
-    timestamp_vec->push_back(timestamp);
-  }
-
-  std::cout << "Timestamps: " << std::endl
-            << timestamp_vec->front() << " " << timestamp_vec->back()
-            << std::endl;
-
-  return true;
-}
-
-bool KittiParser::loadPosesIntoVector(const std::string &filename,
-                                      std::vector<Transformation> *poses_vec) {
-  std::ifstream import_file(filename, std::ios::in);
-  if (!import_file) {
-    return false;
-  }
-
-  poses_vec->clear();
-  std::string line;
-  std::vector<double> parsed_doubles;
-  Transformation pose;
-  while (std::getline(import_file, line)) {
-    if (parseVectorOfDoubles(line, &parsed_doubles)) {
-      if (convertGroundTruthToPose(parsed_doubles, &pose)) {
-        poses_vec->push_back(pose);
-      }
-    }
-  }
-}
-
 bool KittiParser::getCameraCalibration(uint64_t cam_id,
-                                       CameraCalibration *cam) const {
+                                       CameraCalibration* cam) const {
   if (cam_id >= camera_calibrations_.size()) {
     return false;
   }
@@ -463,8 +409,8 @@ bool KittiParser::getCameraCalibration(uint64_t cam_id,
   return true;
 }
 
-bool KittiParser::getPoseAtEntry(uint64_t entry, uint64_t *timestamp,
-                                 Transformation *pose) {
+bool KittiParser::getPoseAtEntry(uint64_t entry, uint64_t* timestamp,
+                                 Transformation* pose) {
   std::string filename = dataset_path_ + "/" + kPoseFolder + "/" + kDataFolder +
                          "/" + getFilenameForEntry(entry) + ".txt";
 
@@ -489,25 +435,6 @@ bool KittiParser::getPoseAtEntry(uint64_t entry, uint64_t *timestamp,
   return false;
 }
 
-bool KittiParser::getGroundTruthPoseAtEntry(uint64_t entry, uint64_t *timestamp,
-                                            Transformation *pose) {
-  std::string filename = dataset_path_ + "/00.txt";
-  std::cout << filename << std::endl;
-
-  std::ifstream import_file(filename, std::ios::in);
-  if (!import_file) {
-    return false;
-  }
-  if (timestamps_pose_ns_.size() <= entry) {
-    std::cout << timestamps_pose_ns_.size() << std::endl;
-    return false;
-  }
-  *timestamp = timestamps_pose_ns_[entry];
-  *pose = poses_vec_[entry];
-
-  return true;
-}
-
 uint64_t KittiParser::getPoseTimestampAtEntry(uint64_t entry) {
   if (timestamps_pose_ns_.size() <= entry) {
     return 0;
@@ -516,8 +443,8 @@ uint64_t KittiParser::getPoseTimestampAtEntry(uint64_t entry) {
 }
 
 bool KittiParser::getPointcloudAtEntry(
-    uint64_t entry, uint64_t *timestamp,
-    pcl::PointCloud<pcl::PointXYZI> *ptcloud) {
+    uint64_t entry, uint64_t* timestamp,
+    pcl::PointCloud<pcl::PointXYZI>* ptcloud) {
   // Get the timestamp for this first.
   if (timestamps_vel_ns_.size() <= entry) {
     std::cout << "Warning: no timestamp for this entry!\n";
@@ -527,7 +454,7 @@ bool KittiParser::getPointcloudAtEntry(
   *timestamp = timestamps_vel_ns_[entry];
 
   // Load the actual pointcloud.
-  const size_t kMaxNumberOfPoints = 1e6; // From Readme for raw files.
+  const size_t kMaxNumberOfPoints = 1e6;  // From Readme for raw files.
   ptcloud->clear();
   ptcloud->reserve(kMaxNumberOfPoints);
 
@@ -545,8 +472,8 @@ bool KittiParser::getPointcloudAtEntry(
   // https://github.com/yanii/kitti-pcl/blob/master/src/kitti2pcd.cpp
   for (size_t i = 0; input.good() && !input.eof(); i++) {
     pcl::PointXYZI point;
-    input.read((char *)&point.x, 3 * sizeof(float));
-    input.read((char *)&point.intensity, sizeof(float));
+    input.read((char*)&point.x, 3 * sizeof(float));
+    input.read((char*)&point.intensity, sizeof(float));
     ptcloud->push_back(point);
   }
   input.close();
@@ -554,7 +481,7 @@ bool KittiParser::getPointcloudAtEntry(
 }
 
 bool KittiParser::getImageAtEntry(uint64_t entry, uint64_t cam_id,
-                                  uint64_t *timestamp, cv::Mat *image) {
+                                  uint64_t* timestamp, cv::Mat* image) {
   // Get the timestamp for this first.
   if (timestamps_cam_ns_.size() <= cam_id ||
       timestamps_cam_ns_[cam_id].size() <= entry) {
@@ -577,8 +504,8 @@ bool KittiParser::getImageAtEntry(uint64_t entry, uint64_t cam_id,
 }
 
 // From the MATLAB raw data dev kit.
-bool KittiParser::convertGpsToPose(const std::vector<double> &oxts,
-                                   Transformation *pose) {
+bool KittiParser::convertGpsToPose(const std::vector<double>& oxts,
+                                   Transformation* pose) {
   if (oxts.size() < 6) {
     return false;
   }
@@ -624,45 +551,13 @@ bool KittiParser::convertGpsToPose(const std::vector<double> &oxts,
 }
 
 // From the MATLAB raw data dev kit.
-bool KittiParser::convertGroundTruthToPose(const std::vector<double> &oxts,
-                                           Transformation *pose) {
-  std::cout << oxts.size() << std::endl;
-  if (oxts.size() < 11) {
-    return false;
-  }
-  Eigen::Vector3d position(oxts[3], oxts[7], oxts[11]);
-
-  Eigen::Matrix3d rotation;
-  rotation << oxts[0], oxts[1], oxts[2], oxts[4], oxts[5], oxts[6], oxts[8],
-      oxts[9], oxts[10];
-
-  Eigen::Quaterniond quaternion(rotation);
-
-  Transformation transform(position, quaternion);
-
-  // Undo the initial transformation, if one is set.
-  // If not, set it.
-  // The transformation only undoes translation and yaw, not roll and pitch
-  // (as these are observable from the gravity vector).
-  if (!initial_pose_set_) {
-    T_initial_pose_.getPosition() = transform.getPosition();
-    T_initial_pose_.getRotation() = transform.getRotation();
-    initial_pose_set_ = true;
-  }
-  // Get back to local coordinates.
-  *pose = T_initial_pose_.inverse() * transform;
-
-  return true;
-}
-
-// From the MATLAB raw data dev kit.
 double KittiParser::latToScale(double lat) const {
   return cos(lat * M_PI / 180.0);
 }
 
 // From the MATLAB raw data dev kit.
 void KittiParser::latlonToMercator(double lat, double lon, double scale,
-                                   Eigen::Vector2d *mercator) const {
+                                   Eigen::Vector2d* mercator) const {
   double er = 6378137;
   mercator->x() = scale * lon * M_PI * er / 180.0;
   mercator->y() = scale * er * log(tan((90.0 + lat) * M_PI / 360.0));
@@ -693,7 +588,7 @@ Transformation KittiParser::T_cam0_vel() const { return T_cam0_vel_; }
 Transformation KittiParser::T_vel_imu() const { return T_vel_imu_; }
 
 bool KittiParser::interpolatePoseAtTimestamp(uint64_t timestamp,
-                                             Transformation *pose) {
+                                             Transformation* pose) {
   // Look up the closest 2 timestamps to this.
   size_t left_index = timestamps_pose_ns_.size();
   for (size_t i = 0; i < timestamps_pose_ns_.size(); ++i) {
@@ -728,10 +623,8 @@ bool KittiParser::interpolatePoseAtTimestamp(uint64_t timestamp,
   // Load the two transformations.
   uint64_t timestamp_left, timestamp_right;
   Transformation transform_left, transform_right;
-  if (!getGroundTruthPoseAtEntry(left_index, &timestamp_left,
-                                 &transform_left) ||
-      !getGroundTruthPoseAtEntry(left_index + 1, &timestamp_right,
-                                 &transform_right)) {
+  if (!getPoseAtEntry(left_index, &timestamp_left, &transform_left) ||
+      !getPoseAtEntry(left_index + 1, &timestamp_right, &transform_right)) {
     // For some reason couldn't load the poses.
     return false;
   }
@@ -745,4 +638,4 @@ size_t KittiParser::getNumCameras() const {
   return camera_calibrations_.size();
 }
 
-} // namespace kitti
+}  // namespace kitti

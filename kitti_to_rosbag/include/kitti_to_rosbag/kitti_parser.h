@@ -30,19 +30,19 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef KITTI_TO_ROSBAG_KITTI_PARSER_H_
 #define KITTI_TO_ROSBAG_KITTI_PARSER_H_
 
-#include <map>
 #include <memory>
+#include <map>
 
-#include <opencv2/core/core.hpp>
-#include <pcl/conversions.h>
 #include <pcl/point_types.h>
+#include <pcl/conversions.h>
+#include <opencv2/core/core.hpp>
 
 #include "kitti_to_rosbag/kitti_common.h"
 
 namespace kitti {
 
 class KittiParser {
-public:
+ public:
   // Constants for filenames for calibration files.
   static const std::string kVelToCamCalibrationFilename;
   static const std::string kCamToCamCalibrationFilename;
@@ -53,8 +53,8 @@ public:
   static const std::string kTimestampFilename;
   static const std::string kDataFolder;
 
-  KittiParser(const std::string &calibration_path,
-              const std::string &dataset_path, bool rectified);
+  KittiParser(const std::string& calibration_path,
+              const std::string& dataset_path, bool rectified);
 
   // MAIN API: all you should need to use!
   // Loading calibration files.
@@ -62,13 +62,11 @@ public:
   void loadTimestampMaps();
 
   // Load specific entries (indexed by filename).
-  bool getPoseAtEntry(uint64_t entry, uint64_t *timestamp,
-                      Transformation *pose);
-  bool getGroundTruthPoseAtEntry(uint64_t entry, uint64_t *timestamp,
-                                 Transformation *pose);
+  bool getPoseAtEntry(uint64_t entry, uint64_t* timestamp,
+                      Transformation* pose);
   uint64_t getPoseTimestampAtEntry(uint64_t entry);
 
-  bool interpolatePoseAtTimestamp(uint64_t timestamp, Transformation *pose);
+  bool interpolatePoseAtTimestamp(uint64_t timestamp, Transformation* pose);
 
   bool getGpsAtEntry() { /* TODO! */
     return false;
@@ -76,12 +74,12 @@ public:
   bool getImuAtEntry() { /* TODO! */
     return false;
   }
-  bool getPointcloudAtEntry(uint64_t entry, uint64_t *timestamp,
-                            pcl::PointCloud<pcl::PointXYZI> *ptcloud);
-  bool getImageAtEntry(uint64_t entry, uint64_t cam_id, uint64_t *timestamp,
-                       cv::Mat *image);
+  bool getPointcloudAtEntry(uint64_t entry, uint64_t* timestamp,
+                            pcl::PointCloud<pcl::PointXYZI>* ptcloud);
+  bool getImageAtEntry(uint64_t entry, uint64_t cam_id, uint64_t* timestamp,
+                       cv::Mat* image);
 
-  bool getCameraCalibration(uint64_t cam_id, CameraCalibration *cam) const;
+  bool getCameraCalibration(uint64_t cam_id, CameraCalibration* cam) const;
 
   Transformation T_camN_vel(int cam_number) const;
   Transformation T_camN_imu(int cam_number) const;
@@ -96,28 +94,20 @@ public:
 
   size_t getNumCameras() const;
 
-private:
+ private:
   bool loadCamToCamCalibration();
   bool loadVelToCamCalibration();
   bool loadImuToVelCalibration();
 
-  bool convertGpsToPose(const std::vector<double> &oxts, Transformation *pose);
-  bool convertGroundTruthToPose(const std::vector<double> &oxts,
-                                Transformation *pose);
-
+  bool convertGpsToPose(const std::vector<double>& oxts, Transformation* pose);
   double latToScale(double lat) const;
   void latlonToMercator(double lat, double lon, double scale,
-                        Eigen::Vector2d *mercator) const;
-  bool loadTimestampsIntoVector(const std::string &filename,
-                                std::vector<uint64_t> *timestamp_vec) const;
-  bool loadTimesIntoVector(const std::string &filename,
-                           std::vector<uint64_t> *timestamp_vec) const;
+                        Eigen::Vector2d* mercator) const;
+  bool loadTimestampsIntoVector(const std::string& filename,
+                                std::vector<uint64_t>* timestamp_vec) const;
 
-  bool loadPosesIntoVector(const std::string &filename,
-                           std::vector<Transformation> *poses_vec);
-
-  bool parseVectorOfDoubles(const std::string &input,
-                            std::vector<double> *output) const;
+  bool parseVectorOfDoubles(const std::string& input,
+                            std::vector<double>* output) const;
 
   std::string getFolderNameForCamera(int cam_number) const;
   std::string getFilenameForEntry(uint64_t entry) const;
@@ -140,9 +130,8 @@ private:
   // Timestamp map from index to nanoseconds.
   std::vector<uint64_t> timestamps_vel_ns_;
   std::vector<uint64_t> timestamps_pose_ns_;
-  std::vector<Transformation> poses_vec_;
   // Vector of camera timestamp vectors.
-  std::vector<std::vector<uint64_t>> timestamps_cam_ns_;
+  std::vector<std::vector<uint64_t> > timestamps_cam_ns_;
 
   // Cached pose information, to correct to odometry frame (instead of absolute
   // world coordinates).
@@ -150,6 +139,6 @@ private:
   Transformation T_initial_pose_;
   double mercator_scale_;
 };
-} // namespace kitti
+}
 
-#endif // KITTI_TO_ROSBAG_KITTI_PARSER_H_
+#endif  // KITTI_TO_ROSBAG_KITTI_PARSER_H_

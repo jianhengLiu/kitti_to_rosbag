@@ -1,0 +1,27 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/nrosliu/workspace/utils_ws/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/nrosliu/workspace/utils_ws/src/kitti_to_rosbag/dependencies/eigen_checks/include/**",
+        "/opt/ros/noetic/share/julius/include/**",
+        "/home/nrosliu/workspace/utils_ws/src/kitti_to_rosbag/kitti_to_rosbag/include/**",
+        "/home/nrosliu/workspace/utils_ws/src/kitti_to_rosbag/dependencies/minkindr/minkindr/include/**",
+        "/home/nrosliu/workspace/utils_ws/src/kitti_to_rosbag/dependencies/minkindr_ros/minkindr_conversions/include/**",
+        "/home/nrosliu/workspace/utils_ws/src/kitti_to_rosbag/dependencies/numpy_eigen/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
